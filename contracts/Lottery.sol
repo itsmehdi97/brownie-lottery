@@ -11,7 +11,7 @@ contract Lottery is Ownable{
     uint256 public enteranceFeeUsd = 50 * 10**18;
     address[] people;
     enum lotteryState { CLOSED, OPEN, CALCULATING_WINNER }
-    lotteryState public currentState;
+    lotteryState public currentState = lotteryState.CLOSED;
 
     constructor(address _priceFeed) public {
         priceFeed = AggregatorV3Interface(_priceFeed);
@@ -35,8 +35,8 @@ contract Lottery is Ownable{
     //     people = new address[];
     //     currentState = lotteryState.CLOSED;
     // } 
-    // function createNewLotter() public {
-    //     require(currentState == lotteryState.CLOSED);
-    //     currentState = lotteryState.OPEN;
-    // }
+    function createNewLottery() public {
+        require(currentState == lotteryState.CLOSED);
+        currentState = lotteryState.OPEN;
+    }
 }

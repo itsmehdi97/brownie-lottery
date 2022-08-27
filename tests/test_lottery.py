@@ -16,3 +16,11 @@ def test_lottery_enterancefee(lottery):
     
     assert enterance_fee > Web3.toWei(0.03, "ether")
     assert enterance_fee < Web3.toWei(0.04, "ether")
+
+
+def test_create_new_lottery(lottery):
+    assert lottery.currentState() == 0  # sanity check
+
+    lottery.createNewLottery()
+
+    assert lottery.currentState() == 1
