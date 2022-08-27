@@ -5,7 +5,7 @@ dependencies:
 compiler:
   solc:
     remappings:
-      - "@chainlink=smartcontractkit/chainlink@1.1.1"
+      - "@chainlink=smartcontractkit/chainlink-brownie-contracts@1.1.1"
       - "@openzeppelin=openzeppelin/openzeppelin-contracts@3.0.0"
 networks:
   defualt: development
