@@ -22,7 +22,7 @@ contract Lottery is VRFConsumerBaseV2 {
 
 
     uint256 public enteranceFeeUsd = 50 * 10**18;
-    address[] people;
+    address[] players;
     enum lotteryState { CLOSED, OPEN, CALCULATING_WINNER }
     lotteryState public currentState = lotteryState.CLOSED;
 
@@ -42,7 +42,7 @@ contract Lottery is VRFConsumerBaseV2 {
     function enter() public payable {
         require(currentState == lotteryState.OPEN, "Cant enter lottery at this time.");
         require(msg.value > getEnteranceFee(), "You need to spend more eth.");
-        people.push(msg.sender);
+        players.push(msg.sender);
     }
     function getEnteranceFee() public view returns (uint256) {
         (,int256 price,,,) = priceFeed.latestRoundData();
@@ -61,19 +61,27 @@ contract Lottery is VRFConsumerBaseV2 {
 
     function fulfillRandomWords(uint256 /*requestId*/, uint256[] memory randomWords) internal override {
         randomness = randomWords[0];
-    }
-    // function closeLottery() ownerOnly public payable {
-    //     require(currentState == lotteryState.OPEN);
-    //     currentState = lotteryState.CALCULATING_WINNER;
 
-    //     address winner = people[-1];
-    //     winner.transfer(address(this).balance);
-    //     people = new address[];
-    //     currentState = lotteryState.CLOSED;
-    // } 
+        if (currentState == lotteryState.CALCULATING_WINNER) {
+            address winner = selectWinner(randomness);
+            winner.tarnsfer(address(this).balance);
+            currentState = lotteryState.CLOSED;
+        }
+    }
+
+    function selectWinner(uint256 rand) internal returns (address) {
+        return players[rand % players.length];
+    }
+
+    function closeLottery() ownerOnly public payable {
+        require(currentState == lotteryState.OPEN);
+        currentState = lotteryState.CALCULATING_WINNER;
+        requestRandomNumber();
+    } 
     function createNewLottery() ownerOnly public {
         require(currentState == lotteryState.CLOSED);
         currentState = lotteryState.OPEN;
+        players = new address[];        
     }
 
     modifier ownerOnly {
