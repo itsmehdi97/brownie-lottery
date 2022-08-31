@@ -4,15 +4,12 @@ pragma solidity ^0.8.0;
 
 import "@chainlink/contracts/src/v0.8/VRFConsumerBaseV2.sol";
 import "@chainlink/contracts/src/v0.8/interfaces/VRFCoordinatorV2Interface.sol";
-import "@chainlink/contracts/src/v0.8/interfaces/LinkTokenInterface.sol";
 import "@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol";
 
 contract Lottery is VRFConsumerBaseV2 {
     VRFCoordinatorV2Interface COORDINATOR;
-    LinkTokenInterface LINKTOKEN;
     uint64 s_subscriptionId;
     bytes32 keyHash = 0xd89b2bf150e3b9e13446986e571fb9cab24b13cea0a43ea20a6049a85cc807cc;
-    address link = 0x01BE23585060835E02B77ef475b0Cc51aA1e0709;
     uint256 public randomness;
     uint256 public s_requestId;
     
@@ -22,7 +19,7 @@ contract Lottery is VRFConsumerBaseV2 {
 
 
     uint256 public enteranceFeeUsd = 50 * 10**18;
-    address[] players;
+    address[] public players;
     enum lotteryState { CLOSED, OPEN, CALCULATING_WINNER }
     lotteryState public currentState = lotteryState.CLOSED;
 
@@ -32,11 +29,23 @@ contract Lottery is VRFConsumerBaseV2 {
     uint16 requestConfirmations = 3;
     uint32 numWords = 1;
 
-    constructor(address _priceFeed, uint64 subscriptionId, address _vrfCoordinator) VRFConsumerBaseV2(_vrfCoordinator) {
+    uint256 public fulfillCalledWith;
+    address payable public winner;
+
+    event RequestedRandomness(bytes32 requestId);
+
+    constructor(
+        address _priceFeed,
+        address _vrfCoordinator,
+        // uint64 _subscriptionId,
+        bytes32 _keyHash,
+        uint32 _callbackGasLimit
+    ) VRFConsumerBaseV2(_vrfCoordinator) {
         priceFeed = AggregatorV3Interface(_priceFeed);
         COORDINATOR = VRFCoordinatorV2Interface(_vrfCoordinator);
-        LINKTOKEN = LinkTokenInterface(link);
-        s_subscriptionId = subscriptionId;
+        // s_subscriptionId = _subscriptionId;
+        keyHash = _keyHash;
+        callbackGasLimit = _callbackGasLimit;
         s_owner = msg.sender;
     }
     function enter() public payable {
@@ -49,39 +58,42 @@ contract Lottery is VRFConsumerBaseV2 {
         uint256 adjustedPrice = uint256(price) * 10**10;
         return (enteranceFeeUsd * 10**18) / adjustedPrice;
     }
-    function requestRandomNumber() public {
-        s_requestId = COORDINATOR.requestRandomWords(
+    function requestRandomNumber(uint64 _subId) public returns (uint256) {
+        return COORDINATOR.requestRandomWords(
             keyHash,
-            s_subscriptionId,
+            _subId,
             requestConfirmations,
             callbackGasLimit,
             numWords
         );
     }
 
-    function fulfillRandomWords(uint256 /*requestId*/, uint256[] memory randomWords) internal override {
-        randomness = randomWords[0];
+    function fulfillRandomWords(uint256 requestId, uint256[] memory randomWords) internal override {
+        fulfillCalledWith = requestId;
+        if (s_requestId == requestId) {
+            randomness = randomWords[0];
 
-        if (currentState == lotteryState.CALCULATING_WINNER) {
-            address winner = selectWinner(randomness);
-            winner.tarnsfer(address(this).balance);
-            currentState = lotteryState.CLOSED;
+            if (currentState == lotteryState.CALCULATING_WINNER) {
+                winner = payable(selectWinner(randomness));
+                winner.transfer(address(this).balance);
+                currentState = lotteryState.CLOSED;
+            }
         }
     }
 
-    function selectWinner(uint256 rand) internal returns (address) {
+    function selectWinner(uint256 rand) view internal returns (address) {
         return players[rand % players.length];
     }
 
-    function closeLottery() ownerOnly public payable {
+    function closeLottery(uint64 _subId) ownerOnly public payable {
         require(currentState == lotteryState.OPEN);
         currentState = lotteryState.CALCULATING_WINNER;
-        requestRandomNumber();
+        s_requestId = requestRandomNumber(_subId);
+        emit RequestedRandomness(bytes32(s_requestId));
     } 
     function createNewLottery() ownerOnly public {
         require(currentState == lotteryState.CLOSED);
         currentState = lotteryState.OPEN;
-        players = new address[];        
     }
 
     modifier ownerOnly {
